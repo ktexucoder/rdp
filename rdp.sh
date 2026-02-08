@@ -10,49 +10,51 @@ NC='\033[0m'
 clear
 echo -e "${CYAN}"
 cat << "EOF"
-$$\   $$\ $$$$$$$$\      $$$$$$$$\           $$\                                       $$\
-$$$\  $$ |\__$$  __|     $$  _____|          $$ |                                      $$ |
-$$$$\ $$ |   $$ |        $$ |      $$\   $$\ $$$$$$$\   $$$$$$\  $$\   $$\  $$$$$$$\ $$$$$$\
-$$ $$\$$ |   $$ |$$$$$$\ $$$$$\    \$$\ $$  |$$  __$$\  \____$$\ $$ |  $$ |$$  _____|\_$$  _|
-$$ \$$$$ |   $$ |\______|$$  __|    \$$$$  / $$ |  $$ | $$$$$$$ |$$ |  $$ |\$$$$$$\    $$ |
-$$ |\$$$ |   $$ |        $$ |       $$  $$<  $$ |  $$ |$$  __$$ |$$ |  $$ | \____$$\   $$ |$$\
-$$ | \$$ |   $$ |        $$$$$$$$\ $$  /\$$\ $$ |  $$ |\$$$$$$$ |\$$$$$$  |$$$$$$$  |  \$$$$  |
-\__|  \__|   \__|        \________|\__/  \__|\__|  \__| \_______| \______/ \_______/    \____/
+███████╗ ██████╗ ██████╗  ██████╗███████╗
+██╔════╝██╔════╝██╔═══██╗██╔════╝██╔════╝
+█████╗  ██║     ██║   ██║██║     █████╗
+██╔══╝  ██║     ██║   ██║██║     ██╔══╝
+██║     ╚██████╗╚██████╔╝╚██████╗███████╗
+╚═╝      ╚═════╝ ╚═════╝  ╚═════╝╚══════╝
+NO KVM · SOFTWARE EMULATION MODE
 EOF
 echo -e "${NC}"
-echo "Join Telegram: https://t.me/NTExhaust"
-sleep 3
+sleep 2
 
 # ===================== ROOT CHECK =====================
 if [ "$EUID" -ne 0 ]; then
-  echo -e "${RED}Run as root. Jangan pura-pura kuat.${NC}"
+  echo -e "${RED}Run as root. Jangan bandel.${NC}"
   exit 1
 fi
 
-# ===================== KVM CHECK =====================
-if [ ! -e /dev/kvm ]; then
-  echo -e "${RED}"
-  echo "ERROR: /dev/kvm not found"
-  echo "VPS ini TIDAK support virtualization."
-  echo "Windows TIDAK AKAN BISA JALAN."
-  echo -e "${NC}"
-  exit 1
+# ===================== WARNING =====================
+echo -e "${YELLOW}"
+echo "WARNING:"
+echo "- VPS TIDAK PUNYA KVM"
+echo "- Windows akan SANGAT LAMBAT"
+echo "- Boot bisa 30–90 menit"
+echo "- RDP bisa freeze"
+echo
+read -p "Ketik YES untuk lanjut: " CONFIRM
+echo -e "${NC}"
+
+if [ "$CONFIRM" != "YES" ]; then
+  echo "Dibatalkan. Keputusan bijak."
+  exit 0
 fi
 
-echo -e "${GREEN}KVM detected. VPS ini layak diajak serius.${NC}"
-
-# ===================== SYSTEM UPDATE =====================
+# ===================== UPDATE =====================
 echo -e "${CYAN}Updating system...${NC}"
 apt update && apt upgrade -y
 
-# ===================== DOCKER INSTALL (DEBIAN OFFICIAL) =====================
-echo -e "${CYAN}Installing Docker (Debian repo)...${NC}"
+# ===================== DOCKER INSTALL (DEBIAN) =====================
+echo -e "${CYAN}Installing Docker...${NC}"
 
 apt install -y ca-certificates curl gnupg lsb-release
 
 mkdir -p /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/debian/gpg \
-  | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+ | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 
 echo \
 "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
@@ -63,34 +65,32 @@ apt update
 apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
 systemctl enable docker --now
-
 echo -e "${GREEN}Docker ready.${NC}"
 
-# ===================== WINDOWS SELECTION =====================
+# ===================== WINDOWS CONFIG =====================
 echo
-echo "Select Windows Version:"
-echo "--------------------------------------"
-echo " 2025 | Windows Server 2025"
-echo " 2022 | Windows Server 2022"
-echo " 2019 | Windows Server 2019"
-echo " 11   | Windows 11 Pro"
-echo " 10   | Windows 10 Pro"
-echo "--------------------------------------"
+echo "RECOMMENDED:"
+echo "- VERSION  : 2019 / 2022"
+echo "- RAM      : 2G–4G"
+echo "- CPU      : 1"
+echo "- DISK     : 50–80G"
+echo
 
-read -p "Version: " WINDOWS_VERSION
+read -p "Windows Version (2019/2022): " WINDOWS_VERSION
 read -p "Username: " WINDOWS_USERNAME
 read -s -p "Password: " WINDOWS_PASSWORD
 echo
-read -p "RAM (e.g. 8G): " RAM_SIZE
-read -p "CPU cores (e.g. 4): " CPU_CORES
-read -p "Disk size (e.g. 100G): " DISK_SIZE
+read -p "RAM (e.g. 2G): " RAM_SIZE
+read -p "CPU cores (1 only): " CPU_CORES
+read -p "Disk size (e.g. 60G): " DISK_SIZE
 
-# ===================== DOCKER COMPOSE =====================
+# ===================== DOCKER COMPOSE (NO KVM) =====================
 cat > docker-compose.yml <<EOF
 services:
   windows:
     image: dockurr/windows
     container_name: windows
+    privileged: true
     environment:
       VERSION: "$WINDOWS_VERSION"
       USERNAME: "$WINDOWS_USERNAME"
@@ -98,27 +98,26 @@ services:
       RAM_SIZE: "$RAM_SIZE"
       CPU_CORES: "$CPU_CORES"
       DISK_SIZE: "$DISK_SIZE"
-    devices:
-      - /dev/kvm
-      - /dev/net/tun
-    cap_add:
-      - NET_ADMIN
+      KVM: "false"
+      QEMU_CPU: "max"
+      QEMU_ACCEL: "tcg"
     ports:
       - "8006:8006"
       - "3389:3389/tcp"
       - "3389:3389/udp"
     restart: unless-stopped
-    stop_grace_period: 2m
+    stop_grace_period: 5m
 EOF
 
 # ===================== START =====================
-echo -e "${CYAN}Starting Windows VM...${NC}"
+echo -e "${CYAN}Starting Windows (SOFTWARE EMULATION)...${NC}"
 docker compose up -d
 
 IP=$(curl -s ifconfig.me || curl -s icanhazip.com)
 
-echo -e "${GREEN}DONE.${NC}"
-echo "Web installer : http://$IP:8006"
-echo "RDP           : $IP:3389"
 echo
-echo -e "${YELLOW}Kalau ini gagal, berarti providermu bohong soal KVM.${NC}"
+echo -e "${GREEN}Container started.${NC}"
+echo -e "${CYAN}Installer Web: http://$IP:8006${NC}"
+echo -e "${CYAN}RDP         : $IP:3389${NC}"
+echo
+echo -e "${YELLOW}Kalau hang, TUNGGU. Jangan restart. Ini emulasi, bukan VM beneran.${NC}"
