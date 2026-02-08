@@ -1,94 +1,92 @@
 #!/bin/bash
 
+# ===================== COLORS =====================
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
 YELLOW='\033[0;33m'
 NC='\033[0m'
 
-echo -e '\e[34m'
-echo -e '$$\   $$\ $$$$$$$$\      $$$$$$$$\           $$\                                       $$\     '
-echo -e '$$$\  $$ |\__$$  __|     $$  _____|          $$ |                                      $$ |    '
-echo -e '$$$$\ $$ |   $$ |        $$ |      $$\   $$\ $$$$$$$\   $$$$$$\  $$\   $$\  $$$$$$$\ $$$$$$\   '
-echo -e '$$ $$\$$ |   $$ |$$$$$$\ $$$$$\    \$$\ $$  |$$  __$$\  \____$$\ $$ |  $$ |$$  _____|\_$$  _|  '
-echo -e '$$ \$$$$ |   $$ |\______|$$  __|    \$$$$  / $$ |  $$ | $$$$$$$ |$$ |  $$ |\$$$$$$\    $$ |    '
-echo -e '$$ |\$$$ |   $$ |        $$ |       $$  $$<  $$ |  $$ |$$  __$$ |$$ |  $$ | \____$$\   $$ |$$\ '
-echo -e '$$ | \$$ |   $$ |        $$$$$$$$\ $$  /\$$\ $$ |  $$ |\$$$$$$$ |\$$$$$$  |$$$$$$$  |  \$$$$  |'
-echo -e '\__|  \__|   \__|        \________|\__/  \__|\__|  \__| \_______| \______/ \_______/    \____/ '
-echo -e '\e[0m'
-echo -e "Join our Telegram channel: https://t.me/NTExhaust"
-sleep 5
+clear
+echo -e "${CYAN}"
+cat << "EOF"
+$$\   $$\ $$$$$$$$\      $$$$$$$$\           $$\                                       $$\
+$$$\  $$ |\__$$  __|     $$  _____|          $$ |                                      $$ |
+$$$$\ $$ |   $$ |        $$ |      $$\   $$\ $$$$$$$\   $$$$$$\  $$\   $$\  $$$$$$$\ $$$$$$\
+$$ $$\$$ |   $$ |$$$$$$\ $$$$$\    \$$\ $$  |$$  __$$\  \____$$\ $$ |  $$ |$$  _____|\_$$  _|
+$$ \$$$$ |   $$ |\______|$$  __|    \$$$$  / $$ |  $$ | $$$$$$$ |$$ |  $$ |\$$$$$$\    $$ |
+$$ |\$$$ |   $$ |        $$ |       $$  $$<  $$ |  $$ |$$  __$$ |$$ |  $$ | \____$$\   $$ |$$\
+$$ | \$$ |   $$ |        $$$$$$$$\ $$  /\$$\ $$ |  $$ |\$$$$$$$ |\$$$$$$  |$$$$$$$  |  \$$$$  |
+\__|  \__|   \__|        \________|\__/  \__|\__|  \__| \_______| \______/ \_______/    \____/
+EOF
+echo -e "${NC}"
+echo "Join Telegram: https://t.me/NTExhaust"
+sleep 3
 
-# Install Docker (latest)
-echo -e "${CYAN}Installing Docker...${NC}"
-
-sudo apt update
-sudo apt upgrade -y
-sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-sudo apt update
-sudo apt install -y docker-ce docker-ce-cli containerd.io
-
-# Enable and start Docker
-sudo systemctl enable docker
-sudo systemctl start docker
-
-echo -e "${GREEN}Docker installed and started!${NC}"
-
-# Check Docker Compose plugin
-echo -e "${CYAN}Checking Docker Compose...${NC}"
-if ! docker compose version &> /dev/null
-then
-    echo -e "${YELLOW}Docker Compose not found. Installing...${NC}"
-    sudo apt-get install -y docker-compose-plugin
-else
-    echo -e "${GREEN}Docker Compose is already installed.${NC}"
+# ===================== ROOT CHECK =====================
+if [ "$EUID" -ne 0 ]; then
+  echo -e "${RED}Run as root. Jangan pura-pura kuat.${NC}"
+  exit 1
 fi
 
-CONFIG_FILE="docker-compose.yml"
+# ===================== KVM CHECK =====================
+if [ ! -e /dev/kvm ]; then
+  echo -e "${RED}"
+  echo "ERROR: /dev/kvm not found"
+  echo "VPS ini TIDAK support virtualization."
+  echo "Windows TIDAK AKAN BISA JALAN."
+  echo -e "${NC}"
+  exit 1
+fi
 
-# List of available Windows versions
-echo "Select a Windows version from the list below:"
-echo " Value  | Version                   | Size"
+echo -e "${GREEN}KVM detected. VPS ini layak diajak serius.${NC}"
+
+# ===================== SYSTEM UPDATE =====================
+echo -e "${CYAN}Updating system...${NC}"
+apt update && apt upgrade -y
+
+# ===================== DOCKER INSTALL (DEBIAN OFFICIAL) =====================
+echo -e "${CYAN}Installing Docker (Debian repo)...${NC}"
+
+apt install -y ca-certificates curl gnupg lsb-release
+
+mkdir -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/debian/gpg \
+  | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+echo \
+"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+https://download.docker.com/linux/debian trixie stable" \
+> /etc/apt/sources.list.d/docker.list
+
+apt update
+apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+systemctl enable docker --now
+
+echo -e "${GREEN}Docker ready.${NC}"
+
+# ===================== WINDOWS SELECTION =====================
+echo
+echo "Select Windows Version:"
 echo "--------------------------------------"
-echo " 11     | Windows 11 Pro             | 5.4 GB"
-echo " 11l    | Windows 11 LTSC            | 4.2 GB"
-echo " 11e    | Windows 11 Enterprise      | 5.8 GB"
-echo " 10     | Windows 10 Pro             | 5.7 GB"
-echo " 10l    | Windows 10 LTSC            | 4.6 GB"
-echo " 10e    | Windows 10 Enterprise      | 5.2 GB"
-echo " 8e     | Windows 8.1 Enterprise     | 3.7 GB"
-echo " 7e     | Windows 7 Enterprise       | 3.0 GB"
-echo " ve     | Windows Vista Enterprise   | 3.0 GB"
-echo " xp     | Windows XP Professional    | 0.6 GB"
-echo " 2025   | Windows Server 2025        | 5.0 GB"
-echo " 2022   | Windows Server 2022        | 4.7 GB"
-echo " 2019   | Windows Server 2019        | 5.3 GB"
-echo " 2016   | Windows Server 2016        | 6.5 GB"
-echo " 2012   | Windows Server 2012        | 4.3 GB"
-echo " 2008   | Windows Server 2008        | 3.0 GB"
-echo " 2003   | Windows Server 2003        | 0.6 GB"
+echo " 2025 | Windows Server 2025"
+echo " 2022 | Windows Server 2022"
+echo " 2019 | Windows Server 2019"
+echo " 11   | Windows 11 Pro"
+echo " 10   | Windows 10 Pro"
+echo "--------------------------------------"
 
-echo "Enter the value for the Windows version you want to use:"
-read WINDOWS_VERSION
+read -p "Version: " WINDOWS_VERSION
+read -p "Username: " WINDOWS_USERNAME
+read -s -p "Password: " WINDOWS_PASSWORD
+echo
+read -p "RAM (e.g. 8G): " RAM_SIZE
+read -p "CPU cores (e.g. 4): " CPU_CORES
+read -p "Disk size (e.g. 100G): " DISK_SIZE
 
-echo "Enter a username for Windows:"
-read WINDOWS_USERNAME
-
-echo "Enter a password for Windows:"
-read -s WINDOWS_PASSWORD
-
-echo "Enter RAM size (e.g., 8G):"
-read RAM_SIZE
-
-echo "Enter the number of CPU cores (e.g., 4):"
-read CPU_CORES
-
-echo "Enter disk size (e.g., 256G):"
-read DISK_SIZE
-
-cat > $CONFIG_FILE <<EOF
+# ===================== DOCKER COMPOSE =====================
+cat > docker-compose.yml <<EOF
 services:
   windows:
     image: dockurr/windows
@@ -106,19 +104,21 @@ services:
     cap_add:
       - NET_ADMIN
     ports:
-      - 8006:8006
-      - 3389:3389/tcp
-      - 3389:3389/udp
-    restart: always
+      - "8006:8006"
+      - "3389:3389/tcp"
+      - "3389:3389/udp"
+    restart: unless-stopped
     stop_grace_period: 2m
 EOF
 
-# Start Docker Compose
+# ===================== START =====================
+echo -e "${CYAN}Starting Windows VM...${NC}"
 docker compose up -d
 
-PUBLIC_IP=$(curl -s ifconfig.me || curl -s icanhazip.com)
+IP=$(curl -s ifconfig.me || curl -s icanhazip.com)
 
-echo -e "${GREEN}Docker Compose started successfully!${NC}"
-echo -e "${CYAN}Check your Windows Installation on the website: http://$PUBLIC_IP:8006${NC}"
-echo -e "${CYAN}Connect your RDP when installation is completed."
-echo -e "${YELLOW}Majikayo t.me/candraapn - VPS/RDP Store: https://t.me/candrapn${NC}"
+echo -e "${GREEN}DONE.${NC}"
+echo "Web installer : http://$IP:8006"
+echo "RDP           : $IP:3389"
+echo
+echo -e "${YELLOW}Kalau ini gagal, berarti providermu bohong soal KVM.${NC}"
